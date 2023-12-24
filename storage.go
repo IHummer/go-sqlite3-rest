@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -14,6 +15,7 @@ type Storage interface {
 	DeleteAccount(int) error
 	UpdateAccount(*Account) error
 	GetAccountById(int) (*Account, error)
+	GetAllAccounts() ([]*Account, error)
 }
 
 type SQLiteStore struct {
@@ -74,12 +76,127 @@ func (s *SQLiteStore) CreateAccount(account *Account) (int, error) {
 	return int(id), nil
 }
 
-func (s *SQLiteStore) UpdateAccount(*Account) error {
-	return nil
+func (s *SQLiteStore) UpdateAccount(account *Account) error {
+	exists, err := s.AccountExists(account.Id)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return errors.New("Objeto no encontrado")
+	}
+
+	query := `
+	UPDATE account
+	SET first_name = ?, 
+		last_name = ?, 
+		number = ?, 
+		balance = ? 
+	WHERE id = ?`
+
+	_, err = s.db.Exec(query, account.FirstName, account.LastName, account.Number, account.Balance, account.Id)
+
+	return err
 }
 func (s *SQLiteStore) DeleteAccount(id int) error {
-	return nil
+	exists, err := s.AccountExists(id)
+	if err != nil {
+		//db error
+		return err
+	}
+	if !exists {
+		return errors.New("Objeto no encontrado")
+	}
+	query := "DELETE FROM account WHERE id = ?"
+	_, err = s.db.Exec(query, id)
+	return err
 }
+
+func (s *SQLiteStore) GetAllAccounts() ([]*Account, error) {
+	query := `SELECT 
+		id AS Id,
+		first_name AS FirstName, 
+		last_name AS LastName, 
+		number AS Number, 
+		balance AS Balance, 
+		created_at AS CreatedAt
+	FROM account`
+	// account := new(Account)
+	rows, err := s.db.Query(query)
+
+	if err != nil {
+		return nil, err
+	}
+
+	accounts := []*Account{}
+
+	for rows.Next() {
+		account := new(Account)
+		err := rows.Scan(
+			&account.Id,
+			&account.FirstName,
+			&account.LastName,
+			&account.Number,
+			&account.Balance,
+			&account.CreatedAt)
+
+		if err != nil {
+			return nil, err
+		}
+		accounts = append(accounts, account)
+	}
+	return accounts, nil
+}
+
 func (s *SQLiteStore) GetAccountById(id int) (*Account, error) {
-	return nil, nil
+	query := `SELECT 
+		id AS Id,
+		first_name AS FirstName, 
+		last_name AS LastName, 
+		number AS Number, 
+		balance AS Balance, 
+		created_at AS CreatedAt
+	FROM account WHERE id = ?`
+	// account := new(Account)
+	row := s.db.QueryRow(query, id)
+
+	account, err := ScanIntoAccount(row)
+
+	if err != nil && err != sql.ErrNoRows {
+		//db error
+		return nil, err
+	} else if err != nil && err == sql.ErrNoRows {
+		//account doesn't exists
+		return account, nil
+	}
+
+	return account, nil
+}
+
+func (s *SQLiteStore) AccountExists(id int) (bool, error) {
+	idScan := 0
+
+	query := "SELECT id FROM account WHERE id = ?"
+	row := s.db.QueryRow(query, id)
+	err := row.Scan(&idScan)
+
+	if err != nil && err != sql.ErrNoRows {
+		//db error
+		return false, err
+	} else if err != nil && err == sql.ErrNoRows {
+		//account doesn't exists
+		return false, nil
+	}
+	return true, nil
+}
+
+func ScanIntoAccount(rows *sql.Row) (*Account, error) {
+	account := new(Account)
+	err := rows.Scan(
+		&account.Id,
+		&account.FirstName,
+		&account.LastName,
+		&account.Number,
+		&account.Balance,
+		&account.CreatedAt)
+	return account, err
 }
