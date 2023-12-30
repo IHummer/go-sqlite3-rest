@@ -20,6 +20,30 @@ type CreateAccountRequest struct {
 	LastName  string `json:"lastName"`
 }
 
+type ApiError struct {
+	Error string `json:"error"`
+}
+
+type User struct {
+	Id             int
+	Username       string
+	Email          string
+	Password       string
+	HashedPassword string
+	CreatedAt      time.Time `json:"createdAt"`
+}
+
+type CreateUserRequest struct {
+	Username string `json:"username"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+type UserLoginRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
 func newAccount(firstName, lastName string) *Account {
 	return &Account{
 		// Id:        rand.Intn(10000),

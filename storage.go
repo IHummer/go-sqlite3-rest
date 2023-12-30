@@ -16,6 +16,8 @@ type Storage interface {
 	UpdateAccount(*Account) error
 	GetAccountById(int) (*Account, error)
 	GetAllAccounts() ([]*Account, error)
+	RegisterUser(*User) (int, error)
+	SelectUserPassword(string) (string, error)
 }
 
 type SQLiteStore struct {
@@ -44,9 +46,9 @@ func newSqliteStore() (*SQLiteStore, error) {
 }
 
 func (s *SQLiteStore) Init() error {
-	return s.CreateAccountTable()
+	return s.CreateInitTables()
 }
-func (s *SQLiteStore) CreateAccountTable() error {
+func (s *SQLiteStore) CreateInitTables() error {
 	query := `CREATE TABLE IF NOT EXISTS account (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		first_name VARCHAR(50),
@@ -54,10 +56,50 @@ func (s *SQLiteStore) CreateAccountTable() error {
 		number VARCHAR(300),
 		balance DECIMAL(10,2),
 		created_at DATETIME
-	)`
-
+	)
+	;
+	CREATE TABLE IF NOT EXISTS User (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		username VARCHAR(50) UNIQUE,
+		email VARCHAR(250),
+		password VARCHAR(300),
+		created_at DATETIME
+	)
+	;
+	`
 	_, err := s.db.Exec(query)
 	return err
+}
+
+func (s *SQLiteStore) RegisterUser(user *User) (int, error) {
+	// return nil
+	query := `
+	INSERT INTO User(username, email, password, created_at) 
+	VALUES (?, ?, ?, ?)`
+	resp, err := s.db.Exec(query, user.Username, user.Email, user.HashedPassword, user.CreatedAt)
+	if err != nil {
+		return 0, err
+	}
+	id, err := resp.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	return int(id), nil
+}
+
+func (s *SQLiteStore) SelectUserPassword(username string) (string, error) {
+	// return nil
+	password := ""
+	query := "SELECT password FROM User WHERE username = ?"
+	resp := s.db.QueryRow(query, username)
+
+	err := resp.Scan(&password)
+	if err != nil && err == sql.ErrNoRows {
+		return password, nil
+	} else if err != nil && err != sql.ErrNoRows {
+		return password, err
+	}
+	return password, nil
 }
 
 func (s *SQLiteStore) CreateAccount(account *Account) (int, error) {
